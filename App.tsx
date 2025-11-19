@@ -3,7 +3,7 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import EmailList from './components/EmailList';
 import EmailDetail from './components/EmailDetail';
-import ComposeModal from './components/ComposeModal';
+import ComposeModal, { ComposeInitialData } from './components/ComposeModal';
 import Auth from './components/Auth';
 import { Email, FolderType, INITIAL_USER, User } from './types';
 import { generateInitialEmails } from './services/geminiService';
@@ -15,6 +15,7 @@ const App: React.FC = () => {
   const [currentFolder, setCurrentFolder] = useState<FolderType>(FolderType.INBOX);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
+  const [composeInitialData, setComposeInitialData] = useState<ComposeInitialData | null>(null);
   const [emails, setEmails] = useState<Email[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -150,6 +151,27 @@ const App: React.FC = () => {
       setCurrentFolder(FolderType.INBOX);
   };
 
+  const handleComposeOpen = () => {
+      setComposeInitialData(null); // Clear previous data for new email
+      setIsComposeOpen(true);
+  };
+
+  const handleReply = (replyAll: boolean) => {
+    if (!selectedEmail) return;
+
+    const prefix = selectedEmail.subject.toLowerCase().startsWith('re:') ? '' : 'Re: ';
+    const quoteHeader = `\n\n\n\n-----------------\nفي ${selectedEmail.timestamp.toLocaleString('ar-EG')}، كتب ${selectedEmail.senderName} <${selectedEmail.senderEmail}>:\n`;
+    // Simple quoting: indent body with >
+    const quotedBody = selectedEmail.body.split('\n').map(line => `> ${line}`).join('\n');
+
+    setComposeInitialData({
+        to: selectedEmail.senderEmail,
+        subject: prefix + selectedEmail.subject,
+        body: quoteHeader + quotedBody
+    });
+    setIsComposeOpen(true);
+  };
+
   const handleSendEmail = async (to: string, subject: string, body: string) => {
     const newEmail: Email = {
       id: `sent-${Date.now()}`,
@@ -243,7 +265,7 @@ const App: React.FC = () => {
       <Sidebar 
         currentFolder={currentFolder}
         onFolderChange={(folder) => { setCurrentFolder(folder); setSelectedEmail(null); setIsSidebarOpen(false); }}
-        onCompose={() => setIsComposeOpen(true)}
+        onCompose={handleComposeOpen}
         unreadCount={unreadCount}
         isOpen={isSidebarOpen}
       />
@@ -281,6 +303,7 @@ const App: React.FC = () => {
                 canGoNewer={canGoNewer}
                 canGoOlder={canGoOlder}
                 onNavigate={handleNavigate}
+                onReply={handleReply}
               />
             ) : (
               <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -300,6 +323,7 @@ const App: React.FC = () => {
         isOpen={isComposeOpen}
         onClose={() => setIsComposeOpen(false)}
         onSend={handleSendEmail}
+        initialData={composeInitialData}
       />
     </div>
   );

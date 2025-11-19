@@ -1,14 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Minimize2, Maximize2, Paperclip, Send, Wand2, Loader2 } from 'lucide-react';
 import { draftEmailContent } from '../services/geminiService';
+
+export interface ComposeInitialData {
+  to: string;
+  subject: string;
+  body: string;
+}
 
 interface ComposeModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSend: (to: string, subject: string, body: string) => void;
+  initialData?: ComposeInitialData | null;
 }
 
-const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onSend }) => {
+const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onSend, initialData }) => {
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -17,6 +24,29 @@ const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onSend }) 
   const [showAiInput, setShowAiInput] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // Reset or Fill form when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (initialData) {
+        setTo(initialData.to);
+        setSubject(initialData.subject);
+        setBody(initialData.body);
+      } else {
+        // Reset if opening as new message
+        setTo('');
+        setSubject('');
+        setBody('');
+      }
+      setAiPrompt('');
+      setShowAiInput(false);
+      setIsMinimized(false);
+    }
+  }, [isOpen, initialData]);
+
+  if (!isOpen && !isMinimized) return null;
+  // If minimized, we still render but in minimized state. 
+  // However, the parent controls rendering usually. 
+  // For this logic, we return null if closed, but handle minimize view if open.
   if (!isOpen) return null;
 
   const handleSend = () => {
@@ -51,7 +81,7 @@ const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onSend }) 
           className="bg-gray-900 text-white px-4 py-2 rounded-t-lg flex justify-between items-center cursor-pointer"
           onClick={() => setIsMinimized(false)}
         >
-          <span className="truncate font-medium">رسالة جديدة</span>
+          <span className="truncate font-medium">{subject || 'رسالة جديدة'}</span>
           <div className="flex items-center gap-2">
              <button onClick={(e) => { e.stopPropagation(); setIsMinimized(false); }}><Maximize2 className="w-4 h-4" /></button>
              <button onClick={(e) => { e.stopPropagation(); resetForm(); }}><X className="w-4 h-4" /></button>
@@ -65,7 +95,9 @@ const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onSend }) 
     <div className="fixed bottom-0 left-0 md:left-24 z-50 w-full md:w-[600px] h-full md:h-[600px] bg-white md:rounded-t-xl shadow-2xl flex flex-col border border-gray-200 ring-1 ring-gray-100">
       {/* Header */}
       <div className="bg-gray-100 px-4 py-3 flex justify-between items-center rounded-t-xl border-b border-gray-200">
-        <h3 className="font-bold text-gray-700">رسالة جديدة</h3>
+        <h3 className="font-bold text-gray-700">
+            {initialData ? 'رد على رسالة' : 'رسالة جديدة'}
+        </h3>
         <div className="flex items-center gap-3 text-gray-500">
           <button onClick={() => setIsMinimized(true)} className="hover:text-gray-800"><Minimize2 className="w-4 h-4" /></button>
           <button onClick={resetForm} className="hover:text-red-500"><X className="w-5 h-5" /></button>
@@ -74,20 +106,24 @@ const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onSend }) 
 
       {/* Form */}
       <div className="flex-1 flex flex-col p-2">
-        <input
-          type="text"
-          placeholder="إلى"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          className="w-full p-3 border-b border-gray-100 focus:outline-none focus:border-blue-500 transition-colors"
-        />
-        <input
-          type="text"
-          placeholder="الموضوع"
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          className="w-full p-3 border-b border-gray-100 focus:outline-none focus:border-blue-500 transition-colors font-medium"
-        />
+        <div className="relative">
+            <span className="absolute right-3 top-3 text-gray-500 text-sm font-bold">إلى:</span>
+            <input
+            type="text"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="w-full p-3 pr-12 border-b border-gray-100 focus:outline-none focus:border-blue-500 transition-colors text-sm"
+            />
+        </div>
+        <div className="relative">
+            <span className="absolute right-3 top-3 text-gray-500 text-sm font-bold">الموضوع:</span>
+            <input
+            type="text"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            className="w-full p-3 pr-16 border-b border-gray-100 focus:outline-none focus:border-blue-500 transition-colors font-medium text-sm"
+            />
+        </div>
         
         {/* AI Assistant Area */}
         {showAiInput ? (
@@ -99,7 +135,7 @@ const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onSend }) 
             <input 
               type="text" 
               className="w-full p-2 border border-purple-200 rounded mb-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
-              placeholder="عن ماذا تريد أن تكتب؟ (مثلاً: اعتذار عن الاجتماع لظرف صحي)"
+              placeholder="عن ماذا تريد أن تكتب؟ (مثلاً: وافق على العرض واشكر المرسل)"
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
               autoFocus
@@ -137,7 +173,7 @@ const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onSend }) 
           placeholder="اكتب رسالتك هنا..."
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          className="w-full flex-1 p-3 resize-none focus:outline-none text-gray-800 leading-relaxed"
+          className="w-full flex-1 p-3 resize-none focus:outline-none text-gray-800 leading-relaxed text-sm"
         />
       </div>
 

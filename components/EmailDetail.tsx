@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowRight, Star, Reply, Trash2, MoreVertical, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowRight, Star, Reply, Trash2, MoreVertical, Sparkles, ChevronLeft, ChevronRight, ReplyAll } from 'lucide-react';
 import { Email } from '../types';
 import { summarizeEmail } from '../services/geminiService';
 
@@ -11,6 +11,7 @@ interface EmailDetailProps {
   canGoNewer: boolean;
   canGoOlder: boolean;
   onNavigate: (direction: 'newer' | 'older') => void;
+  onReply: (replyAll: boolean) => void;
 }
 
 const EmailDetail: React.FC<EmailDetailProps> = ({ 
@@ -20,7 +21,8 @@ const EmailDetail: React.FC<EmailDetailProps> = ({
   onToggleStar,
   canGoNewer,
   canGoOlder,
-  onNavigate
+  onNavigate,
+  onReply
 }) => {
   const [summary, setSummary] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
@@ -79,7 +81,7 @@ const EmailDetail: React.FC<EmailDetailProps> = ({
           <h1 className="text-2xl font-medium text-gray-900 leading-relaxed">{email.subject}</h1>
           <div className="flex items-center gap-2">
             <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-medium">
-              بريد وارد
+              {email.folder}
             </span>
           </div>
         </div>
@@ -124,11 +126,18 @@ const EmailDetail: React.FC<EmailDetailProps> = ({
         </div>
         
         <div className="mt-12 pt-8 border-t border-gray-100 flex gap-4">
-           <button className="flex items-center gap-2 px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-50 transition-colors">
+           <button 
+            onClick={() => onReply(false)}
+            className="flex items-center gap-2 px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-50 transition-colors"
+           >
              <Reply className="w-4 h-4" />
              <span>رد</span>
            </button>
-           <button className="flex items-center gap-2 px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-50 transition-colors">
+           <button 
+            onClick={() => onReply(true)}
+            className="flex items-center gap-2 px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-50 transition-colors"
+           >
+             <ReplyAll className="w-4 h-4" />
              <span>رد على الكل</span>
            </button>
         </div>
