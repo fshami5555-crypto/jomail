@@ -8,7 +8,8 @@ import { fetchUserProfile } from '../services/gmailService';
 // ==========================================
 // ضع Google Client ID الخاص بك هنا ليعمل تسجيل الدخول الحقيقي
 // احصل عليه من: https://console.cloud.google.com/apis/credentials
-const GOOGLE_CLIENT_ID = "PUT_YOUR_GOOGLE_CLIENT_ID_HERE"; 
+// تنبيه: يجب أن يكون Client ID (ينتهي بـ .apps.googleusercontent.com) وليس Client Secret (يبدأ بـ GOCSPX)
+const GOOGLE_CLIENT_ID = "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"; 
 
 interface AuthProps {
   onLogin: (user: User) => void;
@@ -38,7 +39,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
   // Developer helper to copy origin
   const currentOrigin = window.location.origin;
-  const isConfigured = GOOGLE_CLIENT_ID && GOOGLE_CLIENT_ID !== "PUT_YOUR_GOOGLE_CLIENT_ID_HERE";
+  const isConfigured = GOOGLE_CLIENT_ID && (GOOGLE_CLIENT_ID as string) !== "PUT_YOUR_GOOGLE_CLIENT_ID_HERE";
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +61,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const handleGoogleLogin = () => {
     setAuthError('');
     
+    // فحص أمني: التأكد من أن المستخدم لم يضع Client Secret بالخطأ
+    if (GOOGLE_CLIENT_ID.trim().startsWith("GOCSPX-")) {
+      setAuthError("تنبيه أمني: القيمة المدخلة في الكود هي 'Client Secret' (تبدأ بـ GOCSPX). يجب استخدام 'Client ID' في الواجهة الأمامية (ينتهي عادة بـ .apps.googleusercontent.com). يرجى تصحيح الكود.");
+      return;
+    }
+
     // التحقق من وجود المكتبة
     if (!window.google) {
       setAuthError("تعذر تحميل مكتبة Google. يرجى التحقق من اتصالك بالإنترنت وتحديث الصفحة.");
@@ -104,7 +111,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             if (err.type === 'popup_closed') {
                  setAuthError("تم إغلاق نافذة تسجيل الدخول.");
             } else {
-                 setAuthError("حدث خطأ أثناء المصادقة. تأكد من إضافة الرابط الحالي في 'Authorized JavaScript origins' في Google Console.");
+                 setAuthError(`حدث خطأ أثناء المصادقة (${err.type}). تأكد من إضافة ${currentOrigin} في إعدادات 'Authorized JavaScript origins' في Google Console.`);
             }
             setIsLoading(false);
         }
@@ -113,7 +120,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       client.requestAccessToken();
     } catch (err) {
         console.error(err);
-        setAuthError("حدث خطأ غير متوقع أثناء تهيئة Google Sign-In.");
+        setAuthError("حدث خطأ غير متوقع أثناء تهيئة Google Sign-In. تأكد من صحة Client ID.");
         setIsLoading(false);
     }
   };
