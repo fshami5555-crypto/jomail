@@ -20,6 +20,24 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // 1. Restore session on app load
+  useEffect(() => {
+    const savedUserStr = localStorage.getItem('jomail_user');
+    if (savedUserStr) {
+      try {
+        const savedUser = JSON.parse(savedUserStr);
+        setUser(savedUser);
+        setIsLoggedIn(true);
+      } catch (e) {
+        console.error("Failed to parse saved user", e);
+        localStorage.removeItem('jomail_user');
+      }
+    } else {
+        // If no user saved, ensure loading stops
+        setLoading(false);
+    }
+  }, []);
+
   // Load initial data only after login
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -84,8 +102,16 @@ const App: React.FC = () => {
               setEmails(formattedEmails);
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error loading emails", error);
+        
+        // Handle Token Expiration (401 Unauthorized)
+        if (String(error).includes('401') || String(error).toLowerCase().includes('invalid credentials')) {
+            handleLogout(); // Force logout so user can refresh token
+            alert("انتهت صلاحية جلسة العمل. يرجى تسجيل الدخول مرة أخرى.");
+            return;
+        }
+
         // Show error in UI via an email
         setEmails([{
            id: 'error',
@@ -110,6 +136,8 @@ const App: React.FC = () => {
   const handleLogin = (loggedInUser: User) => {
       setUser(loggedInUser);
       setIsLoggedIn(true);
+      // Save to LocalStorage
+      localStorage.setItem('jomail_user', JSON.stringify(loggedInUser));
   };
 
   const handleLogout = () => {
@@ -117,6 +145,8 @@ const App: React.FC = () => {
       setEmails([]);
       setSelectedEmail(null);
       setUser(INITIAL_USER);
+      // Remove from LocalStorage
+      localStorage.removeItem('jomail_user');
   };
 
   const handleSendEmail = async (to: string, subject: string, body: string) => {
@@ -224,11 +254,12 @@ const App: React.FC = () => {
           searchTerm={searchTerm}
           onSearch={setSearchTerm}
           onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          onLogout={handleLogout}
         />
         
         <main className="flex-1 p-2 sm:p-4 overflow-hidden flex">
           <div className={`bg-white rounded-2xl shadow-sm flex-1 flex overflow-hidden relative transition-all duration-300`}>
-            {loading ? (
+            {loading && emails.length === 0 ? (
                  <div className="w-full h-full flex items-center justify-center flex-col gap-4">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                     <p className="text-gray-500 text-sm">جاري تحميل رسائلك...</p>

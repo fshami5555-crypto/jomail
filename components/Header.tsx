@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Menu, Bell, HelpCircle, Settings } from 'lucide-react';
+import { Search, Menu, Bell, HelpCircle, Settings, LogOut } from 'lucide-react';
 import { User } from '../types';
 
 interface HeaderProps {
@@ -7,9 +7,10 @@ interface HeaderProps {
   onMenuClick: () => void;
   searchTerm: string;
   onSearch: (term: string) => void;
+  onLogout?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ user, onMenuClick, searchTerm, onSearch }) => {
+const Header: React.FC<HeaderProps> = ({ user, onMenuClick, searchTerm, onSearch, onLogout }) => {
   const [isFocused, setIsFocused] = useState(false);
 
   return (
@@ -52,15 +53,27 @@ const Header: React.FC<HeaderProps> = ({ user, onMenuClick, searchTerm, onSearch
           <Bell className="w-6 h-6" />
         </button>
         
-        <div className="mr-2 relative group cursor-pointer">
+        <div className="mr-2 relative group cursor-pointer z-50">
            <img 
              src={user.avatarUrl} 
              alt={user.name} 
              className="w-9 h-9 rounded-full border border-gray-300 object-cover"
            />
-           <div className="absolute left-0 top-12 w-48 bg-white shadow-xl rounded-lg p-4 hidden group-hover:block border border-gray-100">
-              <p className="font-bold text-gray-800">{user.name}</p>
-              <p className="text-sm text-gray-500">{user.email}</p>
+           <div className="absolute left-0 top-10 w-56 bg-white shadow-xl rounded-xl p-2 hidden group-hover:block border border-gray-100">
+              <div className="px-3 py-2 border-b border-gray-100 mb-2">
+                <p className="font-bold text-gray-800 truncate">{user.name}</p>
+                <p className="text-xs text-gray-500 truncate">{user.email}</p>
+              </div>
+              
+              {onLogout && (
+                <button 
+                  onClick={onLogout}
+                  className="w-full text-right flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  تسجيل الخروج
+                </button>
+              )}
            </div>
         </div>
       </div>
