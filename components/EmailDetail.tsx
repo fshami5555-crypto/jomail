@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowRight, Star, Reply, Trash2, MoreVertical, Sparkles } from 'lucide-react';
+import { ArrowRight, Star, Reply, Trash2, MoreVertical, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Email } from '../types';
 import { summarizeEmail } from '../services/geminiService';
 
@@ -8,9 +8,20 @@ interface EmailDetailProps {
   onBack: () => void;
   onDelete: (id: string) => void;
   onToggleStar: (id: string) => void;
+  canGoNewer: boolean;
+  canGoOlder: boolean;
+  onNavigate: (direction: 'newer' | 'older') => void;
 }
 
-const EmailDetail: React.FC<EmailDetailProps> = ({ email, onBack, onDelete, onToggleStar }) => {
+const EmailDetail: React.FC<EmailDetailProps> = ({ 
+  email, 
+  onBack, 
+  onDelete, 
+  onToggleStar,
+  canGoNewer,
+  canGoOlder,
+  onNavigate
+}) => {
   const [summary, setSummary] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
 
@@ -26,9 +37,30 @@ const EmailDetail: React.FC<EmailDetailProps> = ({ email, onBack, onDelete, onTo
       {/* Toolbar */}
       <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
         <div className="flex items-center gap-4">
-          <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full text-gray-600">
+          <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full text-gray-600" title="عودة">
             <ArrowRight className="w-5 h-5" />
           </button>
+          
+          {/* Navigation Buttons */}
+          <div className="flex items-center border-r border-gray-300 pr-2 mr-2 gap-1">
+             <button 
+               onClick={() => onNavigate('newer')} 
+               disabled={!canGoNewer}
+               className="p-2 hover:bg-gray-100 rounded-full text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+               title="الأحدث"
+             >
+                <ChevronRight className="w-5 h-5" />
+             </button>
+             <button 
+               onClick={() => onNavigate('older')} 
+               disabled={!canGoOlder}
+               className="p-2 hover:bg-gray-100 rounded-full text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+               title="الأقدم"
+             >
+                <ChevronLeft className="w-5 h-5" />
+             </button>
+          </div>
+
           <button onClick={() => onDelete(email.id)} className="p-2 hover:bg-gray-100 rounded-full text-gray-600 hover:text-red-500" title="حذف">
             <Trash2 className="w-5 h-5" />
           </button>
@@ -42,7 +74,7 @@ const EmailDetail: React.FC<EmailDetailProps> = ({ email, onBack, onDelete, onTo
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-8">
+      <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
         <div className="flex items-start justify-between mb-8">
           <h1 className="text-2xl font-medium text-gray-900 leading-relaxed">{email.subject}</h1>
           <div className="flex items-center gap-2">

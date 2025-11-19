@@ -211,8 +211,6 @@ const App: React.FC = () => {
 
   // Filtering within the loaded batch
   const filteredEmails = emails.filter(email => {
-    // Note: Folder filtering is now handled by the API query in loadEmails
-    // So we mainly filter by search term here
     const matchesSearch = 
       email.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
       email.senderName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -220,6 +218,19 @@ const App: React.FC = () => {
 
     return matchesSearch;
   }).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+  // Navigation Logic
+  const currentIndex = filteredEmails.findIndex(e => e.id === selectedEmail?.id);
+  const canGoNewer = currentIndex > 0;
+  const canGoOlder = currentIndex !== -1 && currentIndex < filteredEmails.length - 1;
+
+  const handleNavigate = (direction: 'newer' | 'older') => {
+      if (currentIndex === -1) return;
+      const newIndex = direction === 'newer' ? currentIndex - 1 : currentIndex + 1;
+      if (newIndex >= 0 && newIndex < filteredEmails.length) {
+          handleSelectEmail(filteredEmails[newIndex]);
+      }
+  };
 
   const unreadCount = emails.filter(e => !e.isRead).length;
 
@@ -254,7 +265,8 @@ const App: React.FC = () => {
         />
         
         <main className="flex-1 p-2 sm:p-4 overflow-hidden flex">
-          <div className={`bg-white rounded-2xl shadow-sm flex-1 flex overflow-hidden relative transition-all duration-300`}>
+          {/* Main Content Container */}
+          <div className={`bg-white rounded-2xl shadow-sm flex-1 flex flex-col overflow-hidden relative transition-all duration-300`}>
             {loading ? (
                  <div className="w-full h-full flex items-center justify-center flex-col gap-4">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -266,14 +278,19 @@ const App: React.FC = () => {
                 onBack={() => setSelectedEmail(null)} 
                 onDelete={handleDeleteEmail}
                 onToggleStar={(id) => handleToggleStar(id, id)}
+                canGoNewer={canGoNewer}
+                canGoOlder={canGoOlder}
+                onNavigate={handleNavigate}
               />
             ) : (
-              <EmailList 
-                emails={filteredEmails}
-                onSelectEmail={handleSelectEmail}
-                onToggleStar={handleToggleStar}
-                selectedEmailId={selectedEmail?.id}
-              />
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                  <EmailList 
+                    emails={filteredEmails}
+                    onSelectEmail={handleSelectEmail}
+                    onToggleStar={handleToggleStar}
+                    selectedEmailId={selectedEmail?.id}
+                  />
+              </div>
             )}
           </div>
         </main>
