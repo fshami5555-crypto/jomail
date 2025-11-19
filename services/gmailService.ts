@@ -78,10 +78,14 @@ export const fetchEmails = async (accessToken: string, maxResults: number = 10):
 };
 
 export const sendGmail = async (accessToken: string, to: string, subject: string, body: string) => {
+  // FIX: Encode subject using RFC 2047 to support Arabic characters in headers
+  // Format: =?utf-8?B?base64_encoded_string?=
+  const encodedSubject = `=?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
+
   // Gmail API requires raw base64url encoded email
   const emailContent = [
     `To: ${to}`,
-    `Subject: ${subject}`,
+    `Subject: ${encodedSubject}`,
     'Content-Type: text/plain; charset="UTF-8"',
     'MIME-Version: 1.0',
     '',
