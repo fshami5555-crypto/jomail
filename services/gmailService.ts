@@ -13,6 +13,7 @@ const decodeBase64 = (data: string) => {
 };
 
 const getHeader = (headers: any[], name: string) => {
+  if (!headers || !Array.isArray(headers)) return '';
   const header = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
   return header ? header.value : '';
 };
@@ -31,18 +32,30 @@ export const fetchEmails = async (accessToken: string, query: string = 'label:IN
     headers: { Authorization: `Bearer ${accessToken}` }
   });
   
-  if (!listResponse.ok) throw new Error('Failed to list messages');
+  if (!listResponse.ok) {
+      const errorData = await listResponse.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || `Failed to list messages: ${listResponse.statusText}`);
+  }
+
   const listData = await listResponse.json();
   
   if (!listData.messages) return [];
 
-  // 2. Fetch details for each message
-  const emails: Email[] = await Promise.all(
-    listData.messages.map(async (msg: { id: string; threadId: string }) => {
+  // 2. Fetch details for each message safely
+  const emailPromises = listData.messages.map(async (msg: { id: string; threadId: string }) => {
+    try {
       const detailResponse = await fetch(`${GMAIL_API_BASE}/messages/${msg.id}`, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
+      
+      if (!detailResponse.ok) return null;
+
       const detail = await detailResponse.json();
+      
+      // Safety check: Ensure payload and headers exist
+      if (!detail.payload || !detail.payload.headers) {
+          return null;
+      }
       
       const headers = detail.payload.headers;
       const from = getHeader(headers, 'From');
@@ -73,25 +86,28 @@ export const fetchEmails = async (accessToken: string, query: string = 'label:IN
         senderName: senderName || 'Unknown',
         senderEmail: senderEmail || '',
         subject: subject || '(No Subject)',
-        body: body, // Using snippet for preview, full body parsing is complex
+        body: body,
         timestamp: new Date(parseInt(detail.internalDate)),
         isRead: !detail.labelIds.includes('UNREAD'),
         isStarred: detail.labelIds.includes('STARRED'),
         folder: folder,
-        avatarColor: 'bg-blue-600' // Default, can be randomized
+        avatarColor: 'bg-blue-600' 
       };
-    })
-  );
+    } catch (e) {
+      console.warn(`Skipping message ${msg.id} due to error:`, e);
+      return null;
+    }
+  });
 
-  return emails;
+  // Filter out nulls (failed messages)
+  const results = await Promise.all(emailPromises);
+  return results.filter((email): email is Email => email !== null);
 };
 
 export const sendGmail = async (accessToken: string, to: string, subject: string, body: string) => {
-  // FIX: Encode subject using RFC 2047 to support Arabic characters in headers
-  // Format: =?utf-8?B?base64_encoded_string?=
+  // Encode subject using RFC 2047 to support Arabic characters in headers
   const encodedSubject = `=?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
 
-  // Gmail API requires raw base64url encoded email
   const emailContent = [
     `To: ${to}`,
     `Subject: ${encodedSubject}`,
