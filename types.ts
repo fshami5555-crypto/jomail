@@ -1,9 +1,15 @@
 export enum FolderType {
   INBOX = 'inbox',
+  STARRED = 'starred',
+  SNOOZED = 'snoozed',
   SENT = 'sent',
   DRAFTS = 'drafts',
-  TRASH = 'trash',
-  STARRED = 'starred'
+  PURCHASES = 'purchases',
+  IMPORTANT = 'important',
+  SCHEDULED = 'scheduled',
+  ALL_MAIL = 'all_mail',
+  SPAM = 'spam',
+  TRASH = 'trash'
 }
 
 export interface Email {

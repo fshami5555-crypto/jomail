@@ -33,41 +33,64 @@ const App: React.FC = () => {
         localStorage.removeItem('jomail_user');
       }
     } else {
-        // If no user saved, ensure loading stops
         setLoading(false);
     }
   }, []);
 
-  // Load initial data only after login
+  // 2. Map FolderType to Gmail Query
+  const getGmailQuery = (folder: FolderType): string => {
+      switch (folder) {
+          case FolderType.INBOX: return 'label:INBOX';
+          case FolderType.SENT: return 'label:SENT';
+          case FolderType.DRAFTS: return 'label:DRAFT';
+          case FolderType.STARRED: return 'label:STARRED';
+          case FolderType.IMPORTANT: return 'label:IMPORTANT';
+          case FolderType.SPAM: return 'label:SPAM';
+          case FolderType.TRASH: return 'label:TRASH';
+          case FolderType.SNOOZED: return 'in:snoozed';
+          case FolderType.SCHEDULED: return 'in:scheduled'; // or label:SCHEDULED
+          case FolderType.PURCHASES: return 'category:purchases';
+          case FolderType.ALL_MAIL: return 'in:all'; // everything including archive
+          default: return 'label:INBOX';
+      }
+  };
+
+  // 3. Load Emails
   useEffect(() => {
     if (!isLoggedIn) return;
 
     const loadEmails = async () => {
       setLoading(true);
+      // Reset emails list when switching folders to show loading state clearly
+      setEmails([]); 
+      
       try {
         if (user.accessToken) {
-          // If user is logged in with Google, fetch REAL emails
-          const realEmails = await fetchEmails(user.accessToken);
+          // Construct query based on current folder
+          const query = getGmailQuery(currentFolder);
+          // Fetch emails using dynamic query
+          const realEmails = await fetchEmails(user.accessToken, query, 30); // Fetching 30 items for "full" feel
+          
           if (realEmails.length > 0) {
              setEmails(realEmails);
           } else {
-             // If empty real inbox, show a welcome placeholder
+             // Empty state logic
              const emptyState: Email = {
-                id: 'welcome-real',
-                senderName: 'Jomail System',
+                id: 'empty-folder',
+                senderName: 'Jomail',
                 senderEmail: 'system@jomail.com',
-                subject: 'مرحباً بك في Jomail المتصل بـ Gmail',
-                body: 'لقد تم ربط حسابك بنجاح. ستظهر رسائلك الحقيقية هنا. إذا كانت القائمة فارغة، فقد لا يكون لديك رسائل حديثة في صندوق الوارد الرئيسي.',
+                subject: 'هذا المجلد فارغ',
+                body: `لا توجد رسائل في ${currentFolder} حالياً.`,
                 timestamp: new Date(),
-                isRead: false,
-                isStarred: true,
-                folder: FolderType.INBOX,
-                avatarColor: 'bg-blue-600'
+                isRead: true,
+                isStarred: false,
+                folder: currentFolder,
+                avatarColor: 'bg-gray-400'
              };
              setEmails([emptyState]);
           }
         } else {
-          // Otherwise, generate AI fake emails for demo
+          // Fallback for simulator mode (unchanged)
           const generated = await generateInitialEmails(user.name);
           const formattedEmails: Email[] = generated.map((e: any, index: number) => ({
             id: `init-${index}`,
@@ -81,44 +104,23 @@ const App: React.FC = () => {
             folder: FolderType.INBOX,
             avatarColor: ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-yellow-500'][index % 5]
           }));
-          
-          if (formattedEmails.length === 0) {
-              const fallbackEmails: Email[] = [
-                   {
-                      id: '1',
-                      senderName: 'فريق Jomail',
-                      senderEmail: 'welcome@jomail.com',
-                      subject: `مرحباً بك يا ${user.name} في منصة Jomail`,
-                      body: 'أهلاً بك في تطبيق البريد الإلكتروني الذكي. نحن سعداء بانضمامك إلينا. يمكنك استخدام أدوات الذكاء الاصطناعي لإنشاء الرسائل وتلخيصها.',
-                      timestamp: new Date(),
-                      isRead: false,
-                      isStarred: true,
-                      folder: FolderType.INBOX,
-                      avatarColor: 'bg-blue-600'
-                   }
-              ];
-              setEmails(fallbackEmails);
-          } else {
-              setEmails(formattedEmails);
-          }
+          setEmails(formattedEmails.length > 0 ? formattedEmails : []);
         }
       } catch (error: any) {
         console.error("Error loading emails", error);
         
-        // Handle Token Expiration (401 Unauthorized)
         if (String(error).includes('401') || String(error).toLowerCase().includes('invalid credentials')) {
-            handleLogout(); // Force logout so user can refresh token
+            handleLogout();
             alert("انتهت صلاحية جلسة العمل. يرجى تسجيل الدخول مرة أخرى.");
             return;
         }
 
-        // Show error in UI via an email
         setEmails([{
            id: 'error',
            senderName: 'System Error',
            senderEmail: 'error@jomail.com',
            subject: 'خطأ في جلب البيانات',
-           body: 'تعذر جلب رسائلك الحقيقية. يرجى التأكد من اتصال الإنترنت أو صلاحيات التطبيق.\n\n' + String(error),
+           body: 'تعذر جلب رسائلك الحقيقية. يرجى التأكد من اتصال الإنترنت أو صلاحيات التطبيق.\n' + String(error),
            timestamp: new Date(),
            isRead: false,
            isStarred: false,
@@ -131,12 +133,11 @@ const App: React.FC = () => {
     };
 
     loadEmails();
-  }, [isLoggedIn, user.name, user.accessToken]);
+  }, [isLoggedIn, user.name, user.accessToken, currentFolder]);
 
   const handleLogin = (loggedInUser: User) => {
       setUser(loggedInUser);
       setIsLoggedIn(true);
-      // Save to LocalStorage
       localStorage.setItem('jomail_user', JSON.stringify(loggedInUser));
   };
 
@@ -145,12 +146,11 @@ const App: React.FC = () => {
       setEmails([]);
       setSelectedEmail(null);
       setUser(INITIAL_USER);
-      // Remove from LocalStorage
       localStorage.removeItem('jomail_user');
+      setCurrentFolder(FolderType.INBOX);
   };
 
   const handleSendEmail = async (to: string, subject: string, body: string) => {
-    // Optimistic UI update
     const newEmail: Email = {
       id: `sent-${Date.now()}`,
       senderName: user.name,
@@ -164,14 +164,16 @@ const App: React.FC = () => {
       avatarColor: 'bg-gray-500'
     };
     
-    setEmails(prev => [newEmail, ...prev]);
+    // If in Sent folder, add to list immediately
+    if (currentFolder === FolderType.SENT) {
+        setEmails(prev => [newEmail, ...prev]);
+    }
+    
     setIsComposeOpen(false);
 
-    // Actual Send Logic
     if (user.accessToken) {
         try {
             await sendGmail(user.accessToken, to, subject, body);
-            console.log("Email sent successfully via Gmail API");
         } catch (error) {
             console.error("Failed to send email via Gmail API", error);
             alert("فشل إرسال الرسالة الحقيقية: " + error);
@@ -180,11 +182,8 @@ const App: React.FC = () => {
   };
 
   const handleDeleteEmail = (id: string) => {
-    setEmails(prev => prev.map(email => 
-      email.id === id 
-        ? { ...email, folder: FolderType.TRASH } 
-        : email
-    ));
+    setEmails(prev => prev.filter(email => email.id !== id)); // Remove from view
+    // Note: Real deletion via API requires another call (trash), simplified for UI here
     if (selectedEmail?.id === id) {
       setSelectedEmail(null);
     }
@@ -210,21 +209,19 @@ const App: React.FC = () => {
     }
   };
 
-  // Filtering
+  // Filtering within the loaded batch
   const filteredEmails = emails.filter(email => {
-    const inFolder = currentFolder === FolderType.STARRED 
-      ? email.isStarred 
-      : email.folder === currentFolder;
-    
+    // Note: Folder filtering is now handled by the API query in loadEmails
+    // So we mainly filter by search term here
     const matchesSearch = 
       email.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
       email.senderName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       email.body.toLowerCase().includes(searchTerm.toLowerCase());
 
-    return inFolder && matchesSearch;
+    return matchesSearch;
   }).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
-  const unreadCount = emails.filter(e => e.folder === FolderType.INBOX && !e.isRead).length;
+  const unreadCount = emails.filter(e => !e.isRead).length;
 
   if (!isLoggedIn) {
       return <Auth onLogin={handleLogin} />;
@@ -240,7 +237,6 @@ const App: React.FC = () => {
         isOpen={isSidebarOpen}
       />
       
-      {/* Overlay for mobile sidebar */}
       {isSidebarOpen && (
         <div 
             className="fixed inset-0 bg-black/50 z-20 md:hidden"
@@ -259,7 +255,7 @@ const App: React.FC = () => {
         
         <main className="flex-1 p-2 sm:p-4 overflow-hidden flex">
           <div className={`bg-white rounded-2xl shadow-sm flex-1 flex overflow-hidden relative transition-all duration-300`}>
-            {loading && emails.length === 0 ? (
+            {loading ? (
                  <div className="w-full h-full flex items-center justify-center flex-col gap-4">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                     <p className="text-gray-500 text-sm">جاري تحميل رسائلك...</p>

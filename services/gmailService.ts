@@ -25,9 +25,9 @@ export const fetchUserProfile = async (accessToken: string) => {
   return response.json();
 };
 
-export const fetchEmails = async (accessToken: string, maxResults: number = 10): Promise<Email[]> => {
-  // 1. List messages
-  const listResponse = await fetch(`${GMAIL_API_BASE}/messages?maxResults=${maxResults}&q=category:primary`, {
+export const fetchEmails = async (accessToken: string, query: string = 'label:INBOX', maxResults: number = 30): Promise<Email[]> => {
+  // 1. List messages with dynamic query
+  const listResponse = await fetch(`${GMAIL_API_BASE}/messages?maxResults=${maxResults}&q=${encodeURIComponent(query)}`, {
     headers: { Authorization: `Bearer ${accessToken}` }
   });
   
@@ -59,6 +59,15 @@ export const fetchEmails = async (accessToken: string, maxResults: number = 10):
           body = detail.snippet;
       }
 
+      // Determine folder (simplified logic based on labels)
+      let folder = FolderType.INBOX;
+      if (detail.labelIds) {
+          if (detail.labelIds.includes('SENT')) folder = FolderType.SENT;
+          else if (detail.labelIds.includes('DRAFT')) folder = FolderType.DRAFTS;
+          else if (detail.labelIds.includes('TRASH')) folder = FolderType.TRASH;
+          else if (detail.labelIds.includes('SPAM')) folder = FolderType.SPAM;
+      }
+
       return {
         id: detail.id,
         senderName: senderName || 'Unknown',
@@ -68,7 +77,7 @@ export const fetchEmails = async (accessToken: string, maxResults: number = 10):
         timestamp: new Date(parseInt(detail.internalDate)),
         isRead: !detail.labelIds.includes('UNREAD'),
         isStarred: detail.labelIds.includes('STARRED'),
-        folder: FolderType.INBOX,
+        folder: folder,
         avatarColor: 'bg-blue-600' // Default, can be randomized
       };
     })
