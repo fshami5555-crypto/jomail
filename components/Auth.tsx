@@ -9,7 +9,7 @@ import { fetchUserProfile } from '../services/gmailService';
 // ضع Google Client ID الخاص بك هنا ليعمل تسجيل الدخول الحقيقي
 // احصل عليه من: https://console.cloud.google.com/apis/credentials
 // تنبيه: يجب أن يكون Client ID (ينتهي بـ .apps.googleusercontent.com) وليس Client Secret (يبدأ بـ GOCSPX)
-const GOOGLE_CLIENT_ID = "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"; 
+const GOOGLE_CLIENT_ID = "1060283634284-jc286ddjc8r7nsgs78cvkptrefhmsf7g.apps.googleusercontent.com"; 
 
 interface AuthProps {
   onLogin: (user: User) => void;
