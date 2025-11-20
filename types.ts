@@ -1,3 +1,4 @@
+
 export enum FolderType {
   INBOX = 'inbox',
   STARRED = 'starred',
@@ -82,4 +83,25 @@ export interface Project {
   id: string;
   name: string;
   progress: number;
+}
+
+// --- JO TASK COMPANY & TEAM TYPES ---
+
+export interface CompanyProfile {
+  name: string;
+  employeesCount: string;
+  contactEmail: string;
+  phone: string;
+  website: string;
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  jobTitle: string;
+  role: UserRole;
+  email: string;
+  password?: string; // Stored locally for simulation
+  avatarColor: string;
+  joinedAt: Date;
 }
