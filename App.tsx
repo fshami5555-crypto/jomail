@@ -5,13 +5,19 @@ import EmailList from './components/EmailList';
 import EmailDetail from './components/EmailDetail';
 import ComposeModal, { ComposeInitialData } from './components/ComposeModal';
 import Auth from './components/Auth';
-import { Email, FolderType, INITIAL_USER, User } from './types';
+import LandingPage from './components/LandingPage';
+import JoTaskApp from './components/JoTaskApp';
+import { Email, FolderType, INITIAL_USER, User, AppType } from './types';
 import { generateInitialEmails } from './services/geminiService';
 import { fetchEmails, sendGmail } from './services/gmailService';
 
 const App: React.FC = () => {
+  // Use AppType to track current view
+  const [view, setView] = useState<AppType>('landing');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState<User>(INITIAL_USER);
+  
+  // Jomail State
   const [currentFolder, setCurrentFolder] = useState<FolderType>(FolderType.INBOX);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
@@ -33,9 +39,8 @@ const App: React.FC = () => {
         console.error("Failed to parse saved user", e);
         localStorage.removeItem('jomail_user');
       }
-    } else {
-        setLoading(false);
     }
+    setLoading(false);
   }, []);
 
   // 2. Map FolderType to Gmail Query
@@ -49,33 +54,29 @@ const App: React.FC = () => {
           case FolderType.SPAM: return 'label:SPAM';
           case FolderType.TRASH: return 'label:TRASH';
           case FolderType.SNOOZED: return 'in:snoozed';
-          case FolderType.SCHEDULED: return 'in:scheduled'; // or label:SCHEDULED
+          case FolderType.SCHEDULED: return 'in:scheduled';
           case FolderType.PURCHASES: return 'category:purchases';
-          case FolderType.ALL_MAIL: return 'in:all'; // everything including archive
+          case FolderType.ALL_MAIL: return 'in:all'; 
           default: return 'label:INBOX';
       }
   };
 
-  // 3. Load Emails
+  // 3. Load Emails (Only for Jomail)
   useEffect(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn || view !== 'jomail') return;
 
     const loadEmails = async () => {
       setLoading(true);
-      // Reset emails list when switching folders to show loading state clearly
       setEmails([]); 
       
       try {
         if (user.accessToken) {
-          // Construct query based on current folder
           const query = getGmailQuery(currentFolder);
-          // Fetch emails using dynamic query
-          const realEmails = await fetchEmails(user.accessToken, query, 30); // Fetching 30 items for "full" feel
+          const realEmails = await fetchEmails(user.accessToken, query, 30);
           
           if (realEmails.length > 0) {
              setEmails(realEmails);
           } else {
-             // Empty state logic
              const emptyState: Email = {
                 id: 'empty-folder',
                 senderName: 'Jomail',
@@ -91,7 +92,7 @@ const App: React.FC = () => {
              setEmails([emptyState]);
           }
         } else {
-          // Fallback for simulator mode (unchanged)
+          // Simulator fallback
           const generated = await generateInitialEmails(user.name);
           const formattedEmails: Email[] = generated.map((e: any, index: number) => ({
             id: `init-${index}`,
@@ -134,12 +135,15 @@ const App: React.FC = () => {
     };
 
     loadEmails();
-  }, [isLoggedIn, user.name, user.accessToken, currentFolder]);
+  }, [isLoggedIn, user.name, user.accessToken, currentFolder, view]);
 
   const handleLogin = (loggedInUser: User) => {
       setUser(loggedInUser);
       setIsLoggedIn(true);
       localStorage.setItem('jomail_user', JSON.stringify(loggedInUser));
+      // If user was trying to access a specific app, go there. Default to Landing.
+      setView('jomail'); // Or stay on landing? Requirement says "Opens JO mail automatically" if logged in from landing page google btn.
+      // But for general login flow, we might want to direct them to what they selected.
   };
 
   const handleLogout = () => {
@@ -149,124 +153,48 @@ const App: React.FC = () => {
       setUser(INITIAL_USER);
       localStorage.removeItem('jomail_user');
       setCurrentFolder(FolderType.INBOX);
+      setView('landing');
   };
 
-  const handleComposeOpen = () => {
-      setComposeInitialData(null); // Clear previous data for new email
-      setIsComposeOpen(true);
+  const handleSelectApp = (appName: string) => {
+      if (appName === 'jomail') setView('jomail');
+      if (appName === 'jotask') setView('jotask');
   };
 
-  const handleReply = (replyAll: boolean) => {
-    if (!selectedEmail) return;
+  // --- Rendering Logic ---
 
-    const prefix = selectedEmail.subject.toLowerCase().startsWith('re:') ? '' : 'Re: ';
-    const quoteHeader = `\n\n\n\n-----------------\nفي ${selectedEmail.timestamp.toLocaleString('ar-EG')}، كتب ${selectedEmail.senderName} <${selectedEmail.senderEmail}>:\n`;
-    // Simple quoting: indent body with >
-    const quotedBody = selectedEmail.body.split('\n').map(line => `> ${line}`).join('\n');
-
-    setComposeInitialData({
-        to: selectedEmail.senderEmail,
-        subject: prefix + selectedEmail.subject,
-        body: quoteHeader + quotedBody
-    });
-    setIsComposeOpen(true);
-  };
-
-  const handleSendEmail = async (to: string, subject: string, body: string) => {
-    const newEmail: Email = {
-      id: `sent-${Date.now()}`,
-      senderName: user.name,
-      senderEmail: user.email,
-      subject: subject,
-      body: body,
-      timestamp: new Date(),
-      isRead: true,
-      isStarred: false,
-      folder: FolderType.SENT,
-      avatarColor: 'bg-gray-500'
-    };
-    
-    // If in Sent folder, add to list immediately
-    if (currentFolder === FolderType.SENT) {
-        setEmails(prev => [newEmail, ...prev]);
-    }
-    
-    setIsComposeOpen(false);
-
-    if (user.accessToken) {
-        try {
-            await sendGmail(user.accessToken, to, subject, body);
-        } catch (error) {
-            console.error("Failed to send email via Gmail API", error);
-            alert("فشل إرسال الرسالة الحقيقية: " + error);
-        }
-    }
-  };
-
-  const handleDeleteEmail = (id: string) => {
-    setEmails(prev => prev.filter(email => email.id !== id)); // Remove from view
-    // Note: Real deletion via API requires another call (trash), simplified for UI here
-    if (selectedEmail?.id === id) {
-      setSelectedEmail(null);
-    }
-  };
-
-  const handleToggleStar = (e: React.MouseEvent | string, id?: string) => {
-    const emailId = typeof e === 'string' ? e : id;
-    if (typeof e !== 'string' && e) e.stopPropagation();
-    
-    if (!emailId) return;
-
-    setEmails(prev => prev.map(email => 
-      email.id === emailId 
-        ? { ...email, isStarred: !email.isStarred } 
-        : email
-    ));
-  };
-
-  const handleSelectEmail = (email: Email) => {
-    setSelectedEmail(email);
-    if (!email.isRead) {
-      setEmails(prev => prev.map(e => e.id === email.id ? { ...e, isRead: true } : e));
-    }
-  };
-
-  // Filtering within the loaded batch
-  const filteredEmails = emails.filter(email => {
-    const matchesSearch = 
-      email.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      email.senderName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      email.body.toLowerCase().includes(searchTerm.toLowerCase());
-
-    return matchesSearch;
-  }).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-
-  // Navigation Logic
-  const currentIndex = filteredEmails.findIndex(e => e.id === selectedEmail?.id);
-  const canGoNewer = currentIndex > 0;
-  const canGoOlder = currentIndex !== -1 && currentIndex < filteredEmails.length - 1;
-
-  const handleNavigate = (direction: 'newer' | 'older') => {
-      if (currentIndex === -1) return;
-      const newIndex = direction === 'newer' ? currentIndex - 1 : currentIndex + 1;
-      if (newIndex >= 0 && newIndex < filteredEmails.length) {
-          handleSelectEmail(filteredEmails[newIndex]);
-      }
-  };
-
-  const unreadCount = emails.filter(e => !e.isRead).length;
-
-  if (!isLoggedIn) {
-      return <Auth onLogin={handleLogin} />;
+  // 1. Landing Page
+  if (view === 'landing') {
+      return <LandingPage 
+        onSelectApp={handleSelectApp} 
+        onLogin={(u) => {
+            handleLogin(u);
+            setView('jomail'); // Landing page login defaults to mail per user request
+        }} 
+      />;
   }
 
+  // 2. Auth Guard
+  if (!isLoggedIn) {
+      return <Auth onLogin={(u) => {
+          handleLogin(u);
+          // Stay on the view the user tried to access
+      }} />;
+  }
+
+  // 3. JO Task
+  if (view === 'jotask') {
+      return <JoTaskApp user={user} onBack={() => setView('landing')} />;
+  }
+
+  // 4. JO Mail (Default App)
   return (
     <div className="flex h-screen bg-[#f6f8fc] overflow-hidden">
       <Sidebar 
         currentFolder={currentFolder}
         onFolderChange={(folder) => { setCurrentFolder(folder); setSelectedEmail(null); setIsSidebarOpen(false); }}
-        onCompose={handleComposeOpen}
-        unreadCount={unreadCount}
+        onCompose={() => { setComposeInitialData(null); setIsComposeOpen(true); }}
+        unreadCount={emails.filter(e => !e.isRead).length}
         isOpen={isSidebarOpen}
       />
       
@@ -286,8 +214,12 @@ const App: React.FC = () => {
           onLogout={handleLogout}
         />
         
+        {/* Header with App Switcher or Back to Landing */}
+        <div className="bg-white border-b px-4 py-1 flex gap-2 md:hidden">
+             <button onClick={() => setView('landing')} className="text-xs text-blue-600">العودة للرئيسية</button>
+        </div>
+        
         <main className="flex-1 p-2 sm:p-4 overflow-hidden flex">
-          {/* Main Content Container */}
           <div className={`bg-white rounded-2xl shadow-sm flex-1 flex flex-col overflow-hidden relative transition-all duration-300`}>
             {loading ? (
                  <div className="w-full h-full flex items-center justify-center flex-col gap-4">
@@ -298,19 +230,33 @@ const App: React.FC = () => {
               <EmailDetail 
                 email={selectedEmail} 
                 onBack={() => setSelectedEmail(null)} 
-                onDelete={handleDeleteEmail}
-                onToggleStar={(id) => handleToggleStar(id, id)}
-                canGoNewer={canGoNewer}
-                canGoOlder={canGoOlder}
-                onNavigate={handleNavigate}
-                onReply={handleReply}
+                onDelete={(id) => setEmails(prev => prev.filter(e => e.id !== id))}
+                onToggleStar={(id) => setEmails(prev => prev.map(e => e.id === id ? { ...e, isStarred: !e.isStarred } : e))}
+                canGoNewer={emails.findIndex(e => e.id === selectedEmail.id) > 0}
+                canGoOlder={emails.findIndex(e => e.id === selectedEmail.id) < emails.length - 1}
+                onNavigate={(dir) => {
+                    const idx = emails.findIndex(e => e.id === selectedEmail.id);
+                    const newIdx = dir === 'newer' ? idx - 1 : idx + 1;
+                    if (emails[newIdx]) setSelectedEmail(emails[newIdx]);
+                }}
+                onReply={(replyAll) => {
+                    const prefix = selectedEmail.subject.toLowerCase().startsWith('re:') ? '' : 'Re: ';
+                    setComposeInitialData({
+                        to: selectedEmail.senderEmail,
+                        subject: prefix + selectedEmail.subject,
+                        body: `\n\n\nOn ${selectedEmail.timestamp}, ${selectedEmail.senderName} wrote:\n> ${selectedEmail.body}`,
+                        threadId: selectedEmail.threadId,
+                        replyToMessageId: selectedEmail.headerMessageId
+                    });
+                    setIsComposeOpen(true);
+                }}
               />
             ) : (
               <div className="flex-1 overflow-y-auto custom-scrollbar">
                   <EmailList 
-                    emails={filteredEmails}
-                    onSelectEmail={handleSelectEmail}
-                    onToggleStar={handleToggleStar}
+                    emails={emails.filter(e => e.subject.includes(searchTerm) || e.senderName.includes(searchTerm))}
+                    onSelectEmail={(e) => { setSelectedEmail(e); if(!e.isRead) setEmails(prev => prev.map(el => el.id === e.id ? {...el, isRead:true}:el)); }}
+                    onToggleStar={(ev, id) => { ev.stopPropagation(); setEmails(prev => prev.map(e => e.id === id ? {...e, isStarred: !e.isStarred} : e)); }}
                     selectedEmailId={selectedEmail?.id}
                   />
               </div>
@@ -322,7 +268,14 @@ const App: React.FC = () => {
       <ComposeModal 
         isOpen={isComposeOpen}
         onClose={() => setIsComposeOpen(false)}
-        onSend={handleSendEmail}
+        onSend={async (to, sub, body, tId, rId) => {
+            setIsComposeOpen(false);
+            // Optimistic UI update
+            if(currentFolder === FolderType.SENT) {
+                 setEmails(prev => [{ id: Date.now().toString(), senderName: user.name, senderEmail: user.email, subject: sub, body, timestamp: new Date(), isRead: true, isStarred: false, folder: FolderType.SENT, avatarColor: 'bg-gray-500' }, ...prev]);
+            }
+            if (user.accessToken) await sendGmail(user.accessToken, to, sub, body, tId, rId);
+        }}
         initialData={composeInitialData}
       />
     </div>

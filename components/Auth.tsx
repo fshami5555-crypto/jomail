@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Mail, User as UserIcon, Lock, ArrowLeft, Check, Loader2, Eye, EyeOff, AlertCircle, Copy } from 'lucide-react';
 import { User } from '../types';
 import { fetchUserProfile } from '../services/gmailService';
@@ -6,9 +6,6 @@ import { fetchUserProfile } from '../services/gmailService';
 // ==========================================
 // إعدادات المطور (Developer Configuration)
 // ==========================================
-// ضع Google Client ID الخاص بك هنا ليعمل تسجيل الدخول الحقيقي
-// احصل عليه من: https://console.cloud.google.com/apis/credentials
-// تنبيه: يجب أن يكون Client ID (ينتهي بـ .apps.googleusercontent.com) وليس Client Secret (يبدأ بـ GOCSPX)
 const GOOGLE_CLIENT_ID = "1060283634284-jc286ddjc8r7nsgs78cvkptrefhmsf7g.apps.googleusercontent.com"; 
 
 interface AuthProps {
@@ -26,6 +23,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
+  
+  // Use Ref to store the token client instance to prevent re-initialization
+  const tokenClient = useRef<any>(null);
 
   // Form states
   const [email, setEmail] = useState('');
@@ -61,66 +61,68 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const handleGoogleLogin = () => {
     setAuthError('');
     
-    // فحص أمني: التأكد من أن المستخدم لم يضع Client Secret بالخطأ
+    // فحص أمني
     if (GOOGLE_CLIENT_ID.trim().startsWith("GOCSPX-")) {
-      setAuthError("تنبيه أمني: القيمة المدخلة في الكود هي 'Client Secret' (تبدأ بـ GOCSPX). يجب استخدام 'Client ID' في الواجهة الأمامية (ينتهي عادة بـ .apps.googleusercontent.com). يرجى تصحيح الكود.");
+      setAuthError("تنبيه أمني: القيمة المدخلة هي 'Client Secret'. يجب استخدام 'Client ID'.");
       return;
     }
 
-    // التحقق من وجود المكتبة
     if (!window.google) {
-      setAuthError("تعذر تحميل مكتبة Google. يرجى التحقق من اتصالك بالإنترنت وتحديث الصفحة.");
+      setAuthError("تعذر تحميل مكتبة Google. يرجى تحديث الصفحة.");
       return;
     }
 
-    // التحقق من إعداد الـ Client ID في الكود
     if (!isConfigured) {
-      setAuthError("لم يتم إعداد Google Client ID في كود التطبيق (ملف Auth.tsx). انظر التعليمات أدناه.");
+      setAuthError("لم يتم إعداد Google Client ID.");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
-        callback: async (tokenResponse: any) => {
-          if (tokenResponse.access_token) {
-             try {
-                const profile = await fetchUserProfile(tokenResponse.access_token);
-                const user: User = {
-                    name: profile.name || "مستخدم Google",
-                    email: profile.email,
-                    avatarUrl: profile.picture,
-                    accessToken: tokenResponse.access_token
-                };
-                onLogin(user);
-             } catch (err) {
-                console.error(err);
-                setAuthError("فشل في جلب بيانات الملف الشخصي.");
-                setIsLoading(false);
-             }
-          } else {
-             setIsLoading(false);
-          }
-        },
-        error_callback: (err: any) => {
-            console.error(err);
-            // Handle standard errors
-            if (err.type === 'popup_closed') {
-                 setAuthError("تم إغلاق نافذة تسجيل الدخول.");
+      // Initialize token client only once
+      if (!tokenClient.current) {
+        tokenClient.current = window.google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+          callback: async (tokenResponse: any) => {
+            if (tokenResponse.access_token) {
+               try {
+                  const profile = await fetchUserProfile(tokenResponse.access_token);
+                  const user: User = {
+                      name: profile.name || "مستخدم Google",
+                      email: profile.email,
+                      avatarUrl: profile.picture,
+                      accessToken: tokenResponse.access_token
+                  };
+                  onLogin(user);
+               } catch (err) {
+                  console.error(err);
+                  setAuthError("فشل في جلب بيانات الملف الشخصي.");
+                  setIsLoading(false);
+               }
             } else {
-                 setAuthError(`حدث خطأ أثناء المصادقة (${err.type}). تأكد من إضافة ${currentOrigin} في إعدادات 'Authorized JavaScript origins' في Google Console.`);
+               setIsLoading(false);
             }
-            setIsLoading(false);
-        }
-      });
+          },
+          error_callback: (err: any) => {
+              console.error("OAuth Error:", err);
+              if (err.type === 'popup_closed') {
+                   setAuthError("تم إغلاق نافذة تسجيل الدخول.");
+              } else {
+                   setAuthError(`حدث خطأ أثناء المصادقة (${err.type}).`);
+              }
+              setIsLoading(false);
+          }
+        });
+      }
 
-      client.requestAccessToken();
+      // Request token using the existing client
+      tokenClient.current.requestAccessToken();
+
     } catch (err) {
         console.error(err);
-        setAuthError("حدث خطأ غير متوقع أثناء تهيئة Google Sign-In. تأكد من صحة Client ID.");
+        setAuthError("حدث خطأ غير متوقع أثناء تهيئة Google Sign-In.");
         setIsLoading(false);
     }
   };
@@ -154,7 +156,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
       <div className="flex flex-col gap-4 w-full max-w-[450px] relative z-10">
         
-        {/* Developer Setup Helper - Only shows if Client ID is missing */}
         {!isConfigured && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 shadow-sm animate-fadeIn">
                 <h3 className="text-sm font-bold text-yellow-800 mb-2 flex items-center gap-2">
@@ -174,9 +175,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                         <Copy className="w-4 h-4" />
                     </button>
                 </div>
-                <p className="text-[10px] text-yellow-600 mt-2">
-                    بعد الحصول على Client ID، ألصقه في ملف <code>Auth.tsx</code> في المتغير <code>GOOGLE_CLIENT_ID</code>.
-                </p>
             </div>
         )}
 
@@ -241,11 +239,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                             </>
                         )}
                     </button>
-                    {!isConfigured && (
-                        <p className="text-[10px] text-center text-gray-400 -mt-3">
-                            * يتطلب إعداد Client ID (انظر التعليمات أعلاه)
-                        </p>
-                    )}
 
                     <div className="relative flex py-1 items-center">
                         <div className="flex-grow border-t border-gray-200"></div>
@@ -295,18 +288,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                         </div>
                     </div>
                         
-                    <div className="flex items-center justify-between text-sm pt-1">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                        <div className="relative flex items-center">
-                            <input type="checkbox" className="peer sr-only" />
-                            <div className="w-4 h-4 border-2 border-gray-300 rounded peer-checked:bg-blue-600 peer-checked:border-blue-600 transition-all"></div>
-                            <Check className="w-3 h-3 text-white absolute top-0.5 right-0.5 opacity-0 peer-checked:opacity-100 transition-opacity" />
-                        </div>
-                        <span className="text-gray-600 select-none">تذكرني</span>
-                        </label>
-                        <a href="#" className="text-blue-600 hover:text-blue-700 font-bold text-xs">نسيت كلمة المرور؟</a>
-                    </div>
-
                     <button 
                         type="submit" 
                         disabled={isLoading}
@@ -347,7 +328,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 </div>
 
                 <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">اسم المستخدم المرغوب</label>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">اسم المستخدم</label>
                     <div className="flex flex-row-reverse border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all bg-gray-50">
                         <span className="bg-gray-100 text-gray-500 px-3 py-2.5 flex items-center text-sm border-r border-gray-200 dir-ltr font-mono">
                         @jomail.com
@@ -355,17 +336,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                         <input 
                         type="text" 
                         required
-                        className="flex-1 px-3 py-2.5 outline-none text-left dir-ltr bg-transparent placeholder-right font-medium text-gray-800"
+                        className="flex-1 px-3 py-2.5 outline-none text-left dir-ltr bg-transparent font-medium text-gray-800"
                         placeholder="username"
                         value={username}
                         onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9.]/g, '').toLowerCase())}
                         />
                     </div>
-                    {username && (
-                        <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                            <Check className="w-3 h-3" /> متاح للاستخدام
-                        </p>
-                    )}
                 </div>
 
                 <div className="space-y-3">
@@ -394,18 +370,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 <button 
                     type="submit" 
                     disabled={isLoading}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-600/30 mt-2 flex items-center justify-center gap-2 disabled:opacity-70 transition-all"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-600/30 mt-2 flex items-center justify-center gap-2"
                 >
                     {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "إنشاء حساب Jomail"}
                 </button>
                 </form>
             )}
-            </div>
-
-            <div className="bg-gray-50 px-8 py-4 text-center border-t border-gray-100">
-                <p className="text-xs text-gray-500">
-                    باستخدامك لـ Jomail فإنك توافق على <a href="#" className="text-blue-600 hover:underline">شروط الخدمة</a> و <a href="#" className="text-blue-600 hover:underline">سياسة الخصوصية</a>
-                </p>
             </div>
         </div>
       </div>

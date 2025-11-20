@@ -77,3 +77,35 @@ export const summarizeEmail = async (emailBody: string): Promise<string> => {
     return "";
   }
 };
+
+// --- JO TASK AI FUNCTIONS ---
+
+export const generateTaskDescription = async (taskTitle: string, department: string): Promise<string> => {
+  if (!apiKey) return "";
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `أنت مساعد مدير مشاريع محترف. قم بكتابة وصف تفصيلي ومهني لمهمة بعنوان: "${taskTitle}" لقسم "${department}".
+      اجعل الوصف على شكل نقاط واضحة (Bullet points) تحدد المطلوب بدقة. باللغة العربية.`,
+    });
+    return response.text || "";
+  } catch (error) {
+    console.error("Task generation failed", error);
+    return "";
+  }
+};
+
+export const refineTaskFeedback = async (rawFeedback: string): Promise<string> => {
+  if (!apiKey) return rawFeedback;
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `أعد صياغة ملاحظات المدير هذه لتكون أكثر احترافية، بناءة، وتشجيعية للموظف، مع الحفاظ على جوهر النقد المطلوب:
+      "${rawFeedback}"
+      باللغة العربية.`,
+    });
+    return response.text || rawFeedback;
+  } catch (error) {
+    return rawFeedback;
+  }
+};

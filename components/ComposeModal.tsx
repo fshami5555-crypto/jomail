@@ -6,12 +6,14 @@ export interface ComposeInitialData {
   to: string;
   subject: string;
   body: string;
+  threadId?: string;
+  replyToMessageId?: string;
 }
 
 interface ComposeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSend: (to: string, subject: string, body: string) => void;
+  onSend: (to: string, subject: string, body: string, threadId?: string, replyToMessageId?: string) => void;
   initialData?: ComposeInitialData | null;
 }
 
@@ -44,14 +46,17 @@ const ComposeModal: React.FC<ComposeModalProps> = ({ isOpen, onClose, onSend, in
   }, [isOpen, initialData]);
 
   if (!isOpen && !isMinimized) return null;
-  // If minimized, we still render but in minimized state. 
-  // However, the parent controls rendering usually. 
-  // For this logic, we return null if closed, but handle minimize view if open.
   if (!isOpen) return null;
 
   const handleSend = () => {
     if (to && subject && body) {
-      onSend(to, subject, body);
+      onSend(
+          to, 
+          subject, 
+          body, 
+          initialData?.threadId, 
+          initialData?.replyToMessageId
+      );
       resetForm();
     }
   };

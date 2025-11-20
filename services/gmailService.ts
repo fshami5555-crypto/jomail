@@ -3,13 +3,19 @@ import { Email, FolderType } from '../types';
 const GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const USER_INFO_API = 'https://www.googleapis.com/oauth2/v1/userinfo';
 
-// Helper to decode base64url strings from Gmail
-const decodeBase64 = (data: string) => {
-  try {
-    return decodeURIComponent(escape(atob(data.replace(/-/g, '+').replace(/_/g, '/'))));
-  } catch (e) {
-    return data;
-  }
+// Modern Base64URL encoding for UTF-8 content using TextEncoder
+// This prevents 'deprecated' warnings and 'Invalid character' errors
+const base64Encode = (str: string) => {
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(str);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
 };
 
 const getHeader = (headers: any[], name: string) => {
@@ -60,6 +66,7 @@ export const fetchEmails = async (accessToken: string, query: string = 'label:IN
       const headers = detail.payload.headers;
       const from = getHeader(headers, 'From');
       const subject = getHeader(headers, 'Subject');
+      const messageId = getHeader(headers, 'Message-ID');
       
       // Simple parsing of sender name and email
       const senderMatch = from.match(/^"?([^"<]*)"? <([^>]*)>$/);
@@ -83,6 +90,8 @@ export const fetchEmails = async (accessToken: string, query: string = 'label:IN
 
       return {
         id: detail.id,
+        threadId: detail.threadId,
+        headerMessageId: messageId,
         senderName: senderName || 'Unknown',
         senderEmail: senderEmail || '',
         subject: subject || '(No Subject)',
@@ -104,23 +113,45 @@ export const fetchEmails = async (accessToken: string, query: string = 'label:IN
   return results.filter((email): email is Email => email !== null);
 };
 
-export const sendGmail = async (accessToken: string, to: string, subject: string, body: string) => {
+export const sendGmail = async (
+    accessToken: string, 
+    to: string, 
+    subject: string, 
+    body: string, 
+    threadId?: string, 
+    inReplyTo?: string
+) => {
+  
   // Encode subject using RFC 2047 to support Arabic characters in headers
-  const encodedSubject = `=?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
+  // We use base64Encode helper for consistent encoding
+  const encodedSubject = `=?utf-8?B?${base64Encode(subject)}?=`;
 
-  const emailContent = [
+  const headers = [
     `To: ${to}`,
     `Subject: ${encodedSubject}`,
     'Content-Type: text/plain; charset="UTF-8"',
     'MIME-Version: 1.0',
+  ];
+
+  // Add Threading Headers if replying
+  if (inReplyTo) {
+      headers.push(`In-Reply-To: ${inReplyTo}`);
+      headers.push(`References: ${inReplyTo}`);
+  }
+
+  const emailContent = [
+    ...headers,
     '',
     body
   ].join('\n');
 
-  const encodedEmail = btoa(unescape(encodeURIComponent(emailContent)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  // Encode entire message using safe Base64URL
+  const raw = base64Encode(emailContent);
+
+  const payload: any = { raw };
+  if (threadId) {
+      payload.threadId = threadId;
+  }
 
   const response = await fetch(`${GMAIL_API_BASE}/messages/send`, {
     method: 'POST',
@@ -128,9 +159,7 @@ export const sendGmail = async (accessToken: string, to: string, subject: string
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      raw: encodedEmail
-    })
+    body: JSON.stringify(payload)
   });
 
   if (!response.ok) {
