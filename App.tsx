@@ -141,9 +141,9 @@ const App: React.FC = () => {
       setUser(loggedInUser);
       setIsLoggedIn(true);
       localStorage.setItem('jomail_user', JSON.stringify(loggedInUser));
-      // If user was trying to access a specific app, go there. Default to Landing.
-      setView('jomail'); // Or stay on landing? Requirement says "Opens JO mail automatically" if logged in from landing page google btn.
-      // But for general login flow, we might want to direct them to what they selected.
+      // We do NOT automatically set view here. 
+      // If logged in from Landing Page, stay on Landing Page.
+      // If logged in from Auth guard (trying to access app), view stays as app and content renders.
   };
 
   const handleLogout = () => {
@@ -159,6 +159,8 @@ const App: React.FC = () => {
   const handleSelectApp = (appName: string) => {
       if (appName === 'jomail') setView('jomail');
       if (appName === 'jotask') setView('jotask');
+      if (appName === 'jodoc') alert('قريباً');
+      if (appName === 'jolearn') alert('قريباً');
   };
 
   // --- Rendering Logic ---
@@ -167,19 +169,15 @@ const App: React.FC = () => {
   if (view === 'landing') {
       return <LandingPage 
         onSelectApp={handleSelectApp} 
-        onLogin={(u) => {
-            handleLogin(u);
-            setView('jomail'); // Landing page login defaults to mail per user request
-        }} 
+        onLogin={handleLogin}
+        user={user}
+        isLoggedIn={isLoggedIn}
       />;
   }
 
   // 2. Auth Guard
   if (!isLoggedIn) {
-      return <Auth onLogin={(u) => {
-          handleLogin(u);
-          // Stay on the view the user tried to access
-      }} />;
+      return <Auth onLogin={handleLogin} />;
   }
 
   // 3. JO Task
@@ -196,6 +194,7 @@ const App: React.FC = () => {
         onCompose={() => { setComposeInitialData(null); setIsComposeOpen(true); }}
         unreadCount={emails.filter(e => !e.isRead).length}
         isOpen={isSidebarOpen}
+        onGoHome={() => setView('landing')}
       />
       
       {isSidebarOpen && (
@@ -214,7 +213,7 @@ const App: React.FC = () => {
           onLogout={handleLogout}
         />
         
-        {/* Header with App Switcher or Back to Landing */}
+        {/* Header with App Switcher or Back to Landing (Mobile) */}
         <div className="bg-white border-b px-4 py-1 flex gap-2 md:hidden">
              <button onClick={() => setView('landing')} className="text-xs text-blue-600">العودة للرئيسية</button>
         </div>

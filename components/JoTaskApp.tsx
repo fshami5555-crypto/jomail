@@ -3,7 +3,7 @@ import {
   Layout, Plus, Search, Bell, Calendar, Clock, 
   MoreVertical, AlertCircle, Paperclip, CheckCircle2, 
   X, User as UserIcon, Moon, Sun, Flag, Lock, Send,
-  Wand2, Image as ImageIcon, Loader2, ChevronDown, Star
+  Wand2, Image as ImageIcon, Loader2, ChevronDown, Star, LayoutGrid
 } from 'lucide-react';
 import { Task, TaskStatus, UserRole, Project, TaskPriority, Attachment, User } from '../types';
 import { generateTaskDescription, refineTaskFeedback } from '../services/geminiService';
@@ -346,8 +346,13 @@ const JoTaskApp: React.FC<JoTaskAppProps> = ({ user, onBack }) => {
                   {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
               </button>
 
-              <button onClick={onBack} className="text-sm text-red-500 hover:text-red-600 font-medium px-3 py-1.5 hover:bg-red-50 rounded-lg transition-colors">
-                  خروج
+              <button 
+                onClick={onBack} 
+                className="flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 font-medium px-3 py-1.5 hover:bg-blue-50 rounded-lg transition-colors"
+                title="JO Workspace"
+              >
+                  <LayoutGrid className="w-5 h-5" />
+                  <span className="hidden md:inline">JO Workspace</span>
               </button>
           </div>
       </header>

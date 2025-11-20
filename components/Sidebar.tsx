@@ -15,7 +15,8 @@ import {
   ChevronDown,
   ChevronUp,
   Settings,
-  Tag
+  Tag,
+  LayoutGrid
 } from 'lucide-react';
 import { FolderType } from '../types';
 
@@ -25,9 +26,10 @@ interface SidebarProps {
   onCompose: () => void;
   unreadCount: number;
   isOpen: boolean;
+  onGoHome?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentFolder, onFolderChange, onCompose, unreadCount, isOpen }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentFolder, onFolderChange, onCompose, unreadCount, isOpen, onGoHome }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const mainItems = [
@@ -47,7 +49,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentFolder, onFolderChange, onComp
     { id: FolderType.TRASH, label: 'المهملات', icon: Trash2, count: 0 },
   ];
 
-  const displayedMoreItems = isExpanded ? moreItems : moreItems.slice(0, 1); // Show 'Purchases' or first item even if collapsed? No, usually hidden or partial. Let's mimic "Less/More".
+  const displayedMoreItems = isExpanded ? moreItems : moreItems.slice(0, 1);
 
   const sidebarClasses = `
     fixed inset-y-0 right-0 z-30 w-64 bg-gray-50 border-l border-gray-200 transform transition-transform duration-300 ease-in-out flex flex-col
@@ -57,11 +59,23 @@ const Sidebar: React.FC<SidebarProps> = ({ currentFolder, onFolderChange, onComp
 
   return (
     <aside className={sidebarClasses}>
-      <div className="p-5 flex items-center gap-3">
-        <div className="text-blue-600">
-            <Mail className="w-7 h-7" />
+      <div className="p-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+            <div className="text-blue-600">
+                <Mail className="w-7 h-7" />
+            </div>
+            <span className="text-2xl font-bold text-gray-600 tracking-tight font-sans">Jomail</span>
         </div>
-        <span className="text-2xl font-bold text-gray-600 tracking-tight font-sans">Jomail</span>
+        
+        {onGoHome && (
+            <button 
+                onClick={onGoHome}
+                className="p-2 text-gray-500 hover:bg-gray-200 rounded-lg transition-colors"
+                title="JO Workspace"
+            >
+                <LayoutGrid className="w-5 h-5" />
+            </button>
+        )}
       </div>
 
       <div className="px-4 pb-4">
